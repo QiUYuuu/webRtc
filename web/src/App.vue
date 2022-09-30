@@ -1,7 +1,10 @@
 <template>
   <button @click="sendMessage()">fasong xiaoxi </button>
+  <button @click="start()">开启摄像头</button>
   <button @click="callOther()">拨打</button>
   <button @click="hangup()">停止</button>
+  <button @click="initWebSocket()">初始化websocket</button>
+  <button @click="closeWebSocket()">断开websocket</button>
   <div id="container">
     <div id="selects">
       <div>
@@ -24,8 +27,17 @@
       </div>
     </div>
     <div id="video">
-      <video width="640" height="480" autoplay></video>
-      <video id="video2" width="640" height="480" autoplay></video>
+      <div class="room">
+        <div style="width: 100%;height: 10%;border-bottom: 1px solid black;">当前用户：{{socketId}}</div>
+        <div style="display: flex;width: 100%;flex-wrap:nowrap;height: 90%;">
+          <div class="info">消息</div>
+          <div class="users">当前房间用户</div>
+        </div>
+      </div>
+      <div class="video">
+        <video id="video1" width="640" height="480" autoplay></video>
+        <video id="video2" width="640" height="480" autoplay></video>
+      </div>
     </div>
   </div>
 </template>
@@ -34,6 +46,7 @@
 <script setup lang="ts">
 
 import { ref, defineComponent, getCurrentInstance, onMounted, onUnmounted, reactive } from 'vue';
+import newWebSocket from '@/utils/websocket';
 
 const { proxy }: any = getCurrentInstance();
 
@@ -43,6 +56,7 @@ const videoinputArray = reactive<InputDeviceInfo[] | MediaDeviceInfo[]>([]);
 const audioinputSource = ref('');
 const audiooutputSource = ref('');
 const socketId = ref('');
+let __WEBSOCKET__: WebSocket;
 const videoinputSource = ref('');
 const callButtonDisabled = ref(false);
 const offerOptions : RTCOfferOptions = { offerToReceiveAudio: true, offerToReceiveVideo: true };
@@ -54,6 +68,25 @@ let videoDom1: HTMLVideoElement;
 const constraints = { audio: true, video: true };
 let localVideo: any = { srcObject: null };
 let localStream: MediaStream;
+
+const initWebSocket = () => {
+  __WEBSOCKET__ = newWebSocket();
+  __WEBSOCKET__.onopen = function (e) {
+      console.log("webSocket链接成功！");
+      // 成功建立连接后，重置心跳检测
+    }
+  __WEBSOCKET__.onmessage = (msg) => {
+    console.log(msg);
+    const data = JSON.parse(msg.data);
+    if (data.type === 'no') {
+      socketId.value = data.data;
+    }
+  }
+}
+
+const closeWebSocket = () => {
+  __WEBSOCKET__.close();
+}
 
 const start = async () => {
   console.log('Requesting local stream');
@@ -68,55 +101,49 @@ const start = async () => {
     callButtonDisabled.value = false;
   } catch (e) {
     console.log(e);
-
   }
 }
 
 const callOther = async () => {
   console.log('Starting call');
-  proxy.$socket.emit('message', {
-    type: "call",
-    socketId: socketId.value,
-  });
-}
-
-//拨打，建立连接
-const call = async () => {
-  callButtonDisabled.value = true;
-  console.log('Starting call');
-  startTime = window.performance.now();
-  const configuration = {};
-  console.log('RTCPeerConnection configuration:', configuration);
-  const servers: RTCConfiguration = {} ;
-  // pc1 源连接
-  pc1Local = new RTCPeerConnection(servers);
-  // pc1 目标
-  pc1Remote = new RTCPeerConnection(servers);
-  // 目标端等待发送过来的流
-  pc1Remote.ontrack = gotRemoteStream1;
-  //当ice准备好后，加到目标源中
-  // 主机端发送流
-  pc1Local.onicecandidate = iceCallback1Local;
-  // 目标端接收流
-  pc1Remote.onicecandidate = iceCallback1Remote;
-
-  window.localStream.getTracks().forEach((track: MediaStreamTrack) => pc1Local.addTrack(track, window.localStream));
-  const dsp = await pc1Local.createOffer(offerOptions).catch(onCreateSessionDescriptionError);
-  gotDescription1Local(dsp);
-    // .then(gotDescription1Local, onCreateSessionDescriptionError);
-  proxy.$socket.emit('message', {
-    type: "sdp",
-    content: dsp,
-  });
+  const socketState = __WEBSOCKET__.readyState;
+  if (socketState != 1) initWebSocket();
+  console.log(__WEBSOCKET__.readyState);
+  console.log("webSocket链接成功！");
+    startTime = window.performance.now();
+    const configuration = {};
+    const servers: RTCConfiguration = {} ;
+    // pc1 源连接
+    pc1Local = new RTCPeerConnection(servers);
+    // pc1 目标
+    // pc1Remote = new RTCPeerConnection(servers);
+    // 目标端等待发送过来的流
+    // pc1Remote.ontrack = gotRemoteStream1;
+    //当ice准备好后，加到目标源中
+    // 主机端发送流
+    pc1Local.onicecandidate = iceCallback1Local;
+    // 目标端接收流
+    // pc1Remote.onicecandidate = iceCallback1Remote;
+    window.localStream.getTracks().forEach((track: MediaStreamTrack) => pc1Local.addTrack(track, window.localStream));
+    const dsp = await pc1Local.createOffer(offerOptions).catch(onCreateSessionDescriptionError);
+    gotDescription1Local(dsp);
+    // __WEBSOCKET__.send(JSON.stringify({
+    //   type: "sdp",
+    //   content: dsp,
+    // }));
   
-  // window.localStream.getTracks().forEach((track: MediaStreamTrack) => pc2Local.addTrack(track, window.localStream));
-  // pc2Local.createOffer(offerOptions)
-  //   .then(gotDescription2Local, onCreateSessionDescriptionError);
-  }
+
+
+
+  // __WEBSOCKET__.send(JSON.stringify({
+  //   type: "call",
+  //   socketId: socketId.value,
+  // }));
+}
 
 onMounted(() => {
 
-  const video = document.querySelector('video');
+  const video = document.querySelector('video#video1');
   const video2 = document.querySelector('video#video2');
   videoDom1 = video2;
   videoDom = video;
@@ -126,35 +153,18 @@ onMounted(() => {
   //   console.log(res);
     
   // });
-
-  proxy.$socket.onopen = function (e) {
-      console.log("webSocket链接成功！");
-      // 成功建立连接后，重置心跳检测
-    }
-
-  // proxy.$socket.on('connect', () => {
-  //   console.log('socket-io connect');
-  // });
-  // proxy.$socket.on('message', (msg) => {
-  //   console.log(msg);
-  // });
-  // proxy.$socket.on('request', (msg) => {
-  //   socketId.value = msg;
-  //   console.log(msg);
-  // });
 });
 
 onUnmounted(() => {
-  proxy.$socket.removeAllListeners('connect');
-  proxy.$socket.removeAllListeners('message');
-
+  __WEBSOCKET__.close();
 });
 
 let sendMessage = () => {
   console.log('发送消息');
-  proxy.$socket.emit('message', {
-    msgContent: '你好啊'
-  });
+  __WEBSOCKET__.send(JSON.stringify({
+    type: "sdp",
+    content: 'dsp',
+  }));
 }
 
 const handleSuccess = (stream) => {
@@ -218,33 +228,20 @@ const onCreateSessionDescriptionError = (error) => {
 
 const gotDescription1Local = (desc) => {
   pc1Local.setLocalDescription(desc);
-  pc1Remote.setRemoteDescription(desc);
-  pc1Remote.createAnswer().then(gotDescription1Remote, onCreateSessionDescriptionError);
+  // pc1Remote.setRemoteDescription(desc);
+  // pc1Remote.createAnswer().then(gotDescription1Remote, onCreateSessionDescriptionError);
 }
 
 const gotDescription1Remote = (desc) => {
   pc1Remote.setLocalDescription(desc);
-  // handleNewIceCandidate(desc);
-  // console.log(`Answer from pc1Remote\n${desc.sdp}`);
   pc1Local.setRemoteDescription(desc);
-}
-
-const gotDescription2Local = (desc) => {
-  pc2Local.setLocalDescription(desc);
-  pc2Remote.setRemoteDescription(desc);
-  pc2Remote.createAnswer().then(gotDescription2Remote, onCreateSessionDescriptionError);
-}
-
-const gotDescription2Remote = (desc) => {
-  pc2Remote.setLocalDescription(desc);
-  pc2Local.setRemoteDescription(desc);
 }
 
 const hangup = () => {
   console.log('Ending calls');
   pc1Local.close();
   // 停止接收
-  // pc1Remote.close();
+  pc1Remote.close();
   pc1Local = pc1Remote = null;
 }
 
@@ -262,23 +259,17 @@ const gotRemoteStream2 = (e) => {
 }
 
 const iceCallback1Local = (event) => {
-  proxy.$socket.emit('message', {
-    type: "candidate",
-    content: event.candidate,
-  });
-  handleCandidate(event.candidate, pc1Remote, 'pc1: ', 'local');
+  console.log(event);
+  
+  // __WEBSOCKET__.send(JSON.stringify({
+  //   type: "candidate",
+  //   content: event.candidate,
+  // }));
+  // handleCandidate(event.candidate, pc1Remote, 'pc1: ', 'local');
 }
 
 const iceCallback1Remote = (event) => {
   handleCandidate(event.candidate, pc1Local, 'pc1: ', 'remote');
-}
-
-const iceCallback2Local = (event) => {
-  handleCandidate(event.candidate, pc2Remote, 'pc2: ', 'local');
-}
-
-const iceCallback2Remote = (event) => {
-  handleCandidate(event.candidate, pc2Local, 'pc2: ', 'remote');
 }
 
 const handleCandidate = (candidate, dest, prefix, type) => {
@@ -294,20 +285,12 @@ const onAddIceCandidateError = (error) => {
   console.log(`Failed to add ICE candidate: ${error.toString()}`);
 }
 
-const handleNewIceCandidate = (candidateSDP) => {
-  const candidateObj = new RTCIceCandidate(candidateSDP);
-
-  myPeerConnection.addIceCandidate(candidateObj).catch({
-    /* handle the error thrown by addIceCandidate() */
-  });
-}
-
-start();
+// start();
 </script>
 
 
 
-<style scoped>
+<style scoped lang="scss">
 #container {
   display: flex;
   flex-wrap: wrap;
@@ -319,9 +302,23 @@ start();
 
 #video {
   display: flex;
-  justify-content: space-around;
+  flex-wrap: nowrap;
   width: 100%;
   border: 1px solid black;
+  .room{
+    width: 30%;
+    border-right: 1px solid black;
+    .info{
+      width: 70%;
+      border-right: 1px solid black;
+    }
+    .users{
+      width: 30%;
+    }
+  }
+  .video{
+    width: 70%;
+  }
 }
 
 #selects {

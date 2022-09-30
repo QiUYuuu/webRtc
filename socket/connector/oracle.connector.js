@@ -245,6 +245,6 @@ function release(connection) {
         });
 }
 
-init();
+// init();
 
 module.exports = {inputParamsStringCollection, executeProcedure, outputParamsCursor,inputParamsVal};

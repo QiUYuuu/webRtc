@@ -10,7 +10,7 @@ import './assets/main.css'
 
 const app = createApp(App)
 
-app.config.globalProperties.$socket = websocket;
+// app.config.globalProperties.$socket = websocket;
 app.config.globalProperties.$axios = service;  //配置axios的全局引用
 
 // 注册全局组件
