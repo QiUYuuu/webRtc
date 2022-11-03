@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import websocket from '@/utils/socket.io';
 import App from './App.vue'
 import router from './router'
 import service from './utils/axios';

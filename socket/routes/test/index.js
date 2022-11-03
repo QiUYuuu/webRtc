@@ -20,17 +20,25 @@ const wss = new WebSocketServer({
 wss.on('connection', function (ws) {
     webSocket = ws;
     const no = intformat(flakeIdGen.next(), 'dec');
-    webSocketObject[no] = ws;
+    console.log(`ONE USER CONNECTED NO:${no}`);
     webSocketObject.push({socketId: no, target: ws})
-    console.log(`[SERVER] connection()`);
-    webSocket.send(JSON.stringify({type: 'no', data: no, users: webSocketObject.map(e => e.socketId)}));
+    webSocket.send(JSON.stringify({type: 'no', data: no}));
+    for(let i = 0; i < webSocketObject.length; i++) {
+        webSocketObject[i]['target'].send(JSON.stringify({type: 'updateUser', users: webSocketObject.map(e => e.socketId)}));
+        webSocketObject[i]['target'].send(JSON.stringify({type: 'joinRoom', msg: `用户:${no}加入房间`}));
+    }
 
-    console.log(Object.keys(webSocketObject));
     ws.on('message', function(msg) {
         console.log(msg);
     });
     ws.on('close', function(msg) {
-      console.log(`[SERVER] close()`, msg);
+        const socketIndex = webSocketObject.findIndex(e => e.socketId === no);
+        webSocketObject.splice(socketIndex, 1);
+        for(let i = 0; i < webSocketObject.length; i++) {
+            webSocketObject[i]['target'].send(JSON.stringify({type: 'joinRoom', msg: `用户:${no}离开房间`}));
+        }
+        console.log(webSocketObject.length);
+        console.log(`[SERVER] close()`, msg);
   });
 
 

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start:prod": "set NODE_ENV=production & set DEBUG=NULL & node ./bin/www",
+    "start:prod": "set NODE_ENV=production & set DEBUG=NULL & nodemon ./bin/www",
     "start:debug": "set DEBUG=express:* & nodemon ./bin/www",
     "start-with-inspect": "node --inspect ./bin/www",
     "init-cache": "node bin/init-caches.js",
